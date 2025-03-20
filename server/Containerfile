@@ -1,0 +1,27 @@
+# Build source TS into JS files
+FROM registry.access.redhat.com/ubi9/nodejs-22 AS build
+
+# This is the default workdir, and will avoid permission issues
+WORKDIR /opt/app-root/src
+
+USER 1001
+
+COPY --chown=1001:1001 package*.json ./
+RUN npm ci
+COPY --chown=1001:1001 tsconfig*.json ./
+COPY --chown=1001:1001 src src
+RUN npm run build
+
+# Create minimal image for runtime
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal
+USER 1001
+
+COPY --chown=1001:1001 --from=build /opt/app-root/src/package*.json/ .
+RUN npm ci --omit=dev
+COPY --chown=1001:1001 --from=build /opt/app-root/src/build build/
+
+# Configure fastify behaviour, and NODE_ENV
+ENV NODE_ENV=production
+
+ENTRYPOINT [ "node" ]
+CMD [ "build/index.js" ]
